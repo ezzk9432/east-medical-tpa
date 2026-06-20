@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  /* East Medical TPA design tokens — deep teal, built for dense financial/case data */
+  --color-ink-900: #0a1f1f;
+  --color-ink-700: #16332f;
+  --color-teal-900: #0d3b3a;
+  --color-teal-800: #114a47;
+  --color-teal-700: #166159;
+  --color-teal-600: #1c7a6e;
+  --color-teal-500: #259485;
+  --color-teal-100: #e3f3f0;
+  --color-teal-50: #f3faf8;
+
+  --color-amber-500: #c8862a;
+  --color-amber-100: #faf0de;
+
+  --color-rose-500: #c0444a;
+  --color-rose-100: #fbe8e8;
+
+  --color-slate-900: #1a2229;
+  --color-slate-700: #3f4b54;
+  --color-slate-500: #6b7680;
+  --color-slate-300: #cbd3d8;
+  --color-slate-100: #eef1f3;
+  --color-slate-50: #f7f9fa;
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+html {
+  font-feature-settings: "tnum" 1, "cv05" 1; /* tabular numerals for financial data */
+}
+
+body {
+  margin: 0;
+  background: var(--color-slate-50);
+  color: var(--color-slate-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-teal-600);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-slate-300);
+  border-radius: 6px;
+}

@@ -1,18 +1,16 @@
 # East Medical Assistance System (TPA)
 
-A Third Party Administrator (TPA) system for managing international medical assistance cases, rebuilt as a real full-stack application (React frontend + Node/Express/TypeScript backend + PostgreSQL) replacing the earlier Lovable no-code prototype.
+A Third Party Administrator (TPA) system for managing international medical assistance cases — a real full-stack application (React frontend + Node/Express/TypeScript backend + PostgreSQL) replacing the earlier Lovable no-code prototype.
 
 ## Project structure
 
 ```
 east-medical-tpa/
 ├── backend/     Node + Express + TypeScript + Prisma API
-└── frontend/    React + Vite + TypeScript (coming next)
+└── frontend/    React + Vite + TypeScript + Tailwind
 ```
 
 ## Status
-
-This is being built incrementally. Current state:
 
 - [x] Database schema (Prisma) covering all SRS entities: users/roles, cases, patients, contracts, providers, medical info, case services, documents, invoices, payments, audit logs
 - [x] Real JWT authentication (access + refresh tokens), bcrypt password hashing
@@ -28,21 +26,19 @@ This is being built incrementally. Current state:
 - [x] Reporting endpoints (dashboard summary, case aging, financial summary)
 - [x] Rate limiting, helmet security headers
 - [x] Seed script with demo data
-- [ ] React frontend
+- [x] **React frontend** — login, dashboard, cases (list/detail/create), providers, contracts, money process, users & roles
 - [ ] Deployment config
 - [ ] MFA, field-level encryption, data retention rules (Phase 6 hardening)
 - [ ] External integrations (payment providers, hospital systems)
 
-## Backend setup
+## Quick start (both servers)
 
-See [backend/README.md](./backend/README.md) for full setup instructions.
-
-Quick start:
+### 1. Backend
 
 ```bash
 cd backend
 cp .env.example .env
-# edit .env with your real DATABASE_URL and JWT secrets
+# edit .env: set DATABASE_URL to a real Postgres instance, generate JWT secrets
 npm install
 npx prisma generate
 npx prisma migrate dev --name init
@@ -50,4 +46,24 @@ npm run seed
 npm run dev
 ```
 
-Backend runs on `http://localhost:4000` by default. Health check: `GET /health`.
+Backend runs on `http://localhost:4000`. Health check: `GET /health`.
+
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs on `http://localhost:5173` and proxies `/api` + `/uploads` to the backend.
+
+### 3. Log in
+
+Open `http://localhost:5173`, log in with:
+
+| Email | Role | Password |
+|---|---|---|
+| layla.hassan@eastmedical.test | ADMIN | Password123! |
+
+See [backend/README.md](./backend/README.md) and [frontend/README.md](./frontend/README.md) for full details.
