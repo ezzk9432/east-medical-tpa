@@ -8,6 +8,12 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 import authRoutes from "./routes/auth.routes";
 import caseRoutes from "./routes/case.routes";
+import providerRoutes from "./routes/provider.routes";
+import contractRoutes from "./routes/contract.routes";
+import caseServiceRoutes from "./routes/caseService.routes";
+import paymentRoutes from "./routes/payment.routes";
+import documentRoutes from "./routes/document.routes";
+import reportRoutes from "./routes/report.routes";
 
 const app = express();
 
@@ -43,6 +49,15 @@ app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date()
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/cases", caseRoutes);
+app.use("/api/providers", providerRoutes);
+app.use("/api/contracts", contractRoutes);
+app.use("/api/case-services", caseServiceRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/documents", documentRoutes);
+app.use("/api/reports", reportRoutes);
+
+// Serve uploaded files (in production, swap for signed S3 URLs instead)
+app.use("/uploads", express.static("uploads"));
 
 app.use(notFoundHandler);
 app.use(errorHandler);

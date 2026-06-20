@@ -19,14 +19,19 @@ This is being built incrementally. Current state:
 - [x] Server-enforced RBAC middleware (Case Manager, Medical Staff, Finance, Admin, Viewer)
 - [x] Audit logging on create/update/view/login actions
 - [x] Case management API (create/list/get/update/notes) with server-generated case numbers
+- [x] Providers API (CRUD)
+- [x] Contracts API (CRUD)
+- [x] Case Services API + real financial calculation engine (pricing, currency conversion, discounts, deductibles, guaranteed amount cap)
+- [x] Invoice generation
+- [x] Payments / Money Process workflow + payment groups
+- [x] Document upload (local disk storage, versioned, soft-delete) — swap to S3 for production
+- [x] Reporting endpoints (dashboard summary, case aging, financial summary)
 - [x] Rate limiting, helmet security headers
 - [x] Seed script with demo data
-- [ ] Providers, Contracts, Documents, Payment Groups APIs
-- [ ] Financial calculation engine (pricing, currency conversion, invoicing)
-- [ ] Document storage (file upload)
-- [ ] Reporting/analytics endpoints
 - [ ] React frontend
 - [ ] Deployment config
+- [ ] MFA, field-level encryption, data retention rules (Phase 6 hardening)
+- [ ] External integrations (payment providers, hospital systems)
 
 ## Backend setup
 
