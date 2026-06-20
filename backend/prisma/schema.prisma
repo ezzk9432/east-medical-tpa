@@ -1,0 +1,378 @@
+// East Medical Assistance System — Database Schema
+// Maps to TPA_System_Analysis.docx sections 3 (Functional Requirements) & 5 (Data Requirements)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────
+
+enum UserRole {
+  CASE_MANAGER
+  MEDICAL_STAFF
+  FINANCE
+  ADMIN
+  VIEWER
+}
+
+enum CaseStatus {
+  NEW
+  HAS_SERVICE
+  ASSIST_CLOSE
+  MONEY_PROCESS
+  CLOSED
+  CANCELLED
+}
+
+enum CaseServiceStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum DocumentCategory {
+  MEDICAL_REPORT
+  LAB_REPORT
+  POLICY
+  PASSPORT
+  INVOICE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSED
+  PAID
+  REJECTED
+}
+
+enum Currency {
+  EUR
+  EGP
+  USD
+  GBP
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  LOGOUT
+  VIEW
+}
+
+// ─────────────────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  fullName     String
+  role         UserRole
+  isActive     Boolean    @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations — things this user created/modified
+  casesCreated      Case[]            @relation("CaseCreatedBy")
+  casesAssigned     Case[]            @relation("CaseAssignedTo")
+  documentsUploaded Document[]
+  auditLogs         AuditLog[]
+  refreshTokens     RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────────────────
+// AUDIT LOG (tamper-evident, append-only)
+// ─────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  action     AuditAction
+  entityType String // e.g. "Case", "Document", "User"
+  entityId   String?
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  details    Json? // before/after diff or extra context
+  ipAddress  String?
+  createdAt  DateTime    @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────
+// PATIENTS (Insured)
+// ─────────────────────────────────────────────────────────
+
+model Patient {
+  id              String   @id @default(uuid())
+  fullName        String
+  dateOfBirth     DateTime?
+  nationality     String?
+  passportNumber  String?
+  policyNumber    String?
+  phone           String?
+  email           String?
+  address         String?
+  emergencyContact String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cases Case[]
+
+  @@map("patients")
+}
+
+// ─────────────────────────────────────────────────────────
+// INSURANCE CONTRACTS
+// ─────────────────────────────────────────────────────────
+
+model Contract {
+  id               String   @id @default(uuid())
+  contractNumber   String   @unique
+  insurerName      String
+  startDate        DateTime
+  endDate          DateTime
+  deductiblePct    Decimal  @default(0) @db.Decimal(5, 2)
+  guaranteedAmount Decimal? @db.Decimal(14, 2)
+  currency         Currency @default(EUR)
+  isActive         Boolean  @default(true)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  cases Case[]
+
+  @@map("contracts")
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDERS (hospitals, clinics, doctors)
+// ─────────────────────────────────────────────────────────
+
+model Provider {
+  id          String   @id @default(uuid())
+  name        String
+  type        String // hospital, clinic, doctor, pharmacy, ambulance, etc.
+  country     String
+  city        String?
+  phone       String?
+  email        String?
+  address     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  caseServices CaseService[]
+
+  @@map("providers")
+}
+
+// ─────────────────────────────────────────────────────────
+// CASES (the core entity)
+// ─────────────────────────────────────────────────────────
+
+model Case {
+  id           String     @id @default(uuid())
+  caseNumber   String     @unique // server-generated, not client-generated
+  status       CaseStatus @default(NEW)
+  isUrgent     Boolean    @default(false)
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("CaseCreatedBy", fields: [createdById], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("CaseAssignedTo", fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  closedAt  DateTime?
+
+  medicalInfo  MedicalInfo?
+  caseServices CaseService[]
+  documents    Document[]
+  notes        CaseNote[]
+
+  @@map("cases")
+}
+
+model MedicalInfo {
+  id            String   @id @default(uuid())
+  caseId        String   @unique
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  diagnosis     String?
+  icdCode       String?
+  symptoms      String?
+  treatmentPlan String?
+  attendingDoctor String?
+  admissionDate DateTime?
+  dischargeDate DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("medical_info")
+}
+
+model CaseNote {
+  id        String   @id @default(uuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  authorId  String?
+  content   String
+  createdAt DateTime @default(now())
+
+  @@map("case_notes")
+}
+
+// ─────────────────────────────────────────────────────────
+// CASE SERVICES & FINANCIALS
+// ─────────────────────────────────────────────────────────
+
+model CaseService {
+  id         String             @id @default(uuid())
+  caseId     String
+  case       Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  providerId String?
+  provider   Provider?          @relation(fields: [providerId], references: [id])
+
+  serviceType String // consultation, surgery, lab test, medication, transport, etc.
+  description String?
+  status      CaseServiceStatus @default(PENDING)
+
+  // Financials
+  priceIn        Decimal  @db.Decimal(14, 2) // cost from provider
+  priceOut       Decimal  @db.Decimal(14, 2) // billed to insurer
+  currency       Currency @default(EUR)
+  exchangeRate   Decimal  @default(1) @db.Decimal(10, 6) // rate to base currency at time of entry
+  discountPct    Decimal  @default(0) @db.Decimal(5, 2)
+  deductionAmount Decimal @default(0) @db.Decimal(14, 2)
+
+  serviceDate DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items     CaseServiceItem[]
+  documents Document[]
+  invoice   Invoice?
+  payment   Payment?
+
+  @@map("case_services")
+}
+
+model CaseServiceItem {
+  id            String      @id @default(uuid())
+  caseServiceId String
+  caseService   CaseService @relation(fields: [caseServiceId], references: [id], onDelete: Cascade)
+  description   String
+  quantity      Int         @default(1)
+  unitPrice     Decimal     @db.Decimal(14, 2)
+  currency      Currency    @default(EUR)
+  createdAt     DateTime    @default(now())
+
+  @@map("case_service_items")
+}
+
+// ─────────────────────────────────────────────────────────
+// INVOICING & PAYMENTS (Money Process)
+// ─────────────────────────────────────────────────────────
+
+model Invoice {
+  id            String      @id @default(uuid())
+  invoiceNumber String      @unique
+  caseServiceId String      @unique
+  caseService   CaseService @relation(fields: [caseServiceId], references: [id])
+  amount        Decimal     @db.Decimal(14, 2)
+  currency      Currency    @default(EUR)
+  issuedAt      DateTime    @default(now())
+  dueDate       DateTime?
+  pdfUrl        String?
+
+  @@map("invoices")
+}
+
+model PaymentGroup {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+  payments  Payment[]
+
+  @@map("payment_groups")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  caseServiceId  String        @unique
+  caseService    CaseService   @relation(fields: [caseServiceId], references: [id])
+  paymentGroupId String?
+  paymentGroup   PaymentGroup? @relation(fields: [paymentGroupId], references: [id])
+  status         PaymentStatus @default(PENDING)
+  amount         Decimal       @db.Decimal(14, 2)
+  currency       Currency      @default(EUR)
+  paymentRef     String?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────────────────────
+
+model Document {
+  id            String           @id @default(uuid())
+  caseId        String
+  case          Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseServiceId String?
+  caseService   CaseService?     @relation(fields: [caseServiceId], references: [id])
+
+  category   DocumentCategory
+  fileName   String
+  fileUrl    String // storage key/URL, not raw bytes
+  fileSize   Int // bytes
+  mimeType   String
+  version    Int              @default(1)
+  isDeleted  Boolean          @default(false) // soft delete
+
+  uploadedById String
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("documents")
+}
