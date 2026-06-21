@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { writeAuditLog } from "../services/auditLog.service";
 import { calculateServiceFinancials, applyGuaranteedAmountCap, buildInvoiceNumber } from "../services/financial.service";
+import { generateInvoicePdf } from "../services/invoicePdf.service";
 
 const createServiceSchema = z.object({
   caseId: z.string().uuid(),
@@ -115,7 +116,11 @@ export async function generateInvoice(req: Request, res: Response) {
 
   const service = await prisma.caseService.findUnique({
     where: { id: caseServiceId },
-    include: { invoice: true, case: { include: { contract: true } } },
+    include: {
+      invoice: true,
+      provider: true,
+      case: { include: { contract: true, patient: true } },
+    },
   });
 
   if (!service) {
@@ -138,6 +143,24 @@ export async function generateInvoice(req: Request, res: Response) {
 
   const invoiceCount = await prisma.invoice.count();
   const invoiceNumber = buildInvoiceNumber(invoiceCount + 1);
+  const issuedAt = new Date();
+
+  const { fileUrl } = await generateInvoicePdf({
+    invoiceNumber,
+    issuedAt,
+    amount: financials.netPayable,
+    currency: service.currency,
+    caseNumber: service.case.caseNumber,
+    patientName: service.case.patient.fullName,
+    serviceType: service.serviceType,
+    providerName: service.provider?.name,
+    priceIn: Number(service.priceIn),
+    priceOut: Number(service.priceOut),
+    discountPct: Number(service.discountPct),
+    deductibleAmount: financials.deductibleAmount,
+    insurerName: service.case.contract?.insurerName,
+    contractNumber: service.case.contract?.contractNumber,
+  });
 
   const invoice = await prisma.invoice.create({
     data: {
@@ -145,6 +168,8 @@ export async function generateInvoice(req: Request, res: Response) {
       caseServiceId: service.id,
       amount: financials.netPayable,
       currency: service.currency,
+      issuedAt,
+      pdfUrl: fileUrl,
     },
   });
 
