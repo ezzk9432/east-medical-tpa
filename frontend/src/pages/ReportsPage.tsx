@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { getAgingReport, getFinancialReport } from "../api/reports";
 import { Card, CardBody, CardHeader, Badge } from "../components/ui";
 import { PageHeader } from "../components/PageHeader";
+import { Button } from "../components/Button";
 import { caseStatusTone, formatMoney, formatDate } from "../components/format";
+import { exportToCsv, exportToExcel } from "../utils/export";
 
 type Tab = "aging" | "financial";
 
@@ -23,6 +25,36 @@ export function ReportsPage() {
     queryFn: () => getFinancialReport({ startDate: startDate || undefined, endDate: endDate || undefined }),
     enabled: tab === "financial",
   });
+
+  function handleExportAging(format: "csv" | "xlsx") {
+    const rows = (agingQ.data ?? []).map((c) => ({
+      "Case Number": c.caseNumber,
+      "Patient": c.patient.fullName,
+      "Status": c.status.replace(/_/g, " "),
+      "Created": formatDate(c.createdAt),
+      "Age (days)": c.ageDays,
+    }));
+    const filename = `case-aging-report-${new Date().toISOString().slice(0, 10)}`;
+    if (format === "csv") exportToCsv(rows, filename);
+    else exportToExcel(rows, filename, "Case Aging");
+  }
+
+  function handleExportFinancial(format: "csv" | "xlsx") {
+    if (!financialQ.data) return;
+    const rows = [
+      {
+        "Period From": startDate || "All time",
+        "Period To": endDate || "All time",
+        "Service Count": financialQ.data.serviceCount,
+        "Total Cost (In)": financialQ.data.totalPriceIn,
+        "Total Billed (Out)": financialQ.data.totalPriceOut,
+        "Gross Margin": financialQ.data.totalMargin,
+      },
+    ];
+    const filename = `financial-summary-${new Date().toISOString().slice(0, 10)}`;
+    if (format === "csv") exportToCsv(rows, filename);
+    else exportToExcel(rows, filename, "Financial Summary");
+  }
 
   return (
     <div className="p-8">
@@ -49,9 +81,19 @@ export function ReportsPage() {
       {/* Case Aging */}
       {tab === "aging" && (
         <Card className="overflow-hidden">
-          <CardHeader className="font-medium text-slate-700">
-            Open Cases by Age
-            <span className="ml-2 text-xs font-normal text-slate-400">cases not yet closed/cancelled, oldest first</span>
+          <CardHeader className="flex items-center justify-between">
+            <div className="font-medium text-slate-700">
+              Open Cases by Age
+              <span className="ml-2 text-xs font-normal text-slate-400">cases not yet closed/cancelled, oldest first</span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => handleExportAging("csv")} disabled={!agingQ.data?.length}>
+                Export CSV
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExportAging("xlsx")} disabled={!agingQ.data?.length}>
+                Export Excel
+              </Button>
+            </div>
           </CardHeader>
           <table className="w-full text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -120,21 +162,31 @@ export function ReportsPage() {
 
           {financialQ.isLoading && <p className="text-sm text-slate-400">Loading…</p>}
           {financialQ.data && (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <FinCard label="Services" value={String(financialQ.data.serviceCount)} />
-              <FinCard label="Total Cost (In)" value={formatMoney(financialQ.data.totalPriceIn)} colorClass="text-rose-700" />
-              <FinCard label="Total Billed (Out)" value={formatMoney(financialQ.data.totalPriceOut)} colorClass="text-slate-900" />
-              <FinCard
-                label="Gross Margin"
-                value={formatMoney(financialQ.data.totalMargin)}
-                colorClass={financialQ.data.totalMargin >= 0 ? "text-teal-700" : "text-rose-700"}
-                sub={
-                  financialQ.data.totalPriceOut > 0
-                    ? `${((financialQ.data.totalMargin / financialQ.data.totalPriceOut) * 100).toFixed(1)}%`
-                    : undefined
-                }
-              />
-            </div>
+            <>
+              <div className="mb-3 flex gap-2">
+                <Button variant="secondary" size="sm" onClick={() => handleExportFinancial("csv")}>
+                  Export CSV
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => handleExportFinancial("xlsx")}>
+                  Export Excel
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <FinCard label="Services" value={String(financialQ.data.serviceCount)} />
+                <FinCard label="Total Cost (In)" value={formatMoney(financialQ.data.totalPriceIn)} colorClass="text-rose-700" />
+                <FinCard label="Total Billed (Out)" value={formatMoney(financialQ.data.totalPriceOut)} colorClass="text-slate-900" />
+                <FinCard
+                  label="Gross Margin"
+                  value={formatMoney(financialQ.data.totalMargin)}
+                  colorClass={financialQ.data.totalMargin >= 0 ? "text-teal-700" : "text-rose-700"}
+                  sub={
+                    financialQ.data.totalPriceOut > 0
+                      ? `${((financialQ.data.totalMargin / financialQ.data.totalPriceOut) * 100).toFixed(1)}%`
+                      : undefined
+                  }
+                />
+              </div>
+            </>
           )}
         </div>
       )}

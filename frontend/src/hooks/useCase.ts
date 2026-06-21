@@ -9,7 +9,7 @@ import {
   getCaseReport,
   type UpdateCaseInput,
 } from "../api/cases";
-import { createCaseService } from "../api/caseServices";
+import { createCaseService, generateInvoice } from "../api/caseServices";
 import { listDocuments, uploadDocument } from "../api/caseServices";
 import type { DocumentCategory } from "../types";
 
@@ -94,5 +94,13 @@ export function useUploadDocument(caseId: string) {
       queryClient.invalidateQueries({ queryKey: ["documents", caseId] });
       queryClient.invalidateQueries({ queryKey: ["case", caseId] });
     },
+  });
+}
+
+export function useGenerateInvoice(caseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (caseServiceId: string) => generateInvoice(caseServiceId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["case", caseId] }),
   });
 }

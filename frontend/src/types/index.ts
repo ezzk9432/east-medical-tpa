@@ -82,6 +82,15 @@ export interface MedicalInfo {
   dischargeDate?: string | null;
 }
 
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: Currency;
+  issuedAt: string;
+  pdfUrl?: string | null;
+}
+
 export interface CaseService {
   id: string;
   caseId: string;
@@ -97,6 +106,7 @@ export interface CaseService {
   discountPct: number;
   deductionAmount: number;
   serviceDate?: string | null;
+  invoice?: Invoice | null;
 }
 
 export interface CaseDocument {

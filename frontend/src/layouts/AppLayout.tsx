@@ -2,6 +2,8 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useAuthStore } from "../store/authStore";
 import { logoutRequest } from "../api/auth";
+import { useIdleTimeout } from "../hooks/useIdleTimeout";
+import { SessionTimeoutWarning } from "../components/SessionTimeoutWarning";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: "📊", end: true },
@@ -17,6 +19,7 @@ const NAV_ITEMS = [
 export function AppLayout() {
   const navigate = useNavigate();
   const { user, refreshToken, logout } = useAuthStore();
+  const { showWarning, secondsLeft, extendSession, logoutNow } = useIdleTimeout();
 
   async function handleLogout() {
     try {
@@ -70,6 +73,14 @@ export function AppLayout() {
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
+
+      {showWarning && (
+        <SessionTimeoutWarning
+          secondsLeft={secondsLeft}
+          onStaySignedIn={extendSession}
+          onLogoutNow={logoutNow}
+        />
+      )}
     </div>
   );
 }

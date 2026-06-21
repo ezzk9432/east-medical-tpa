@@ -7,6 +7,7 @@ import {
   useDocuments,
   useUploadDocument,
   useCloneCase,
+  useGenerateInvoice,
 } from "../hooks/useCase";
 import { Card, CardBody, CardHeader, Badge, Select } from "../components/ui";
 import { Button } from "../components/Button";
@@ -38,6 +39,7 @@ export function CaseDetailPage() {
   const { data: documents } = useDocuments(id);
   const uploadDoc = useUploadDocument(id);
   const cloneCase = useCloneCase(id);
+  const generateInvoice = useGenerateInvoice(id);
 
   const [noteText, setNoteText] = useState("");
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -154,6 +156,27 @@ export function CaseDetailPage() {
                       <div>Price in: {formatMoney(svc.priceIn, svc.currency)}</div>
                       <div>Price out: {formatMoney(svc.priceOut, svc.currency)}</div>
                       <div>Discount: {svc.discountPct}%</div>
+                    </div>
+                    <div className="mt-2">
+                      {svc.invoice?.pdfUrl ? (
+                        <a
+                          href={svc.invoice.pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-teal-700 hover:underline"
+                        >
+                          Download invoice {svc.invoice.invoiceNumber} (PDF)
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => generateInvoice.mutate(svc.id)}
+                          disabled={generateInvoice.isPending}
+                          className="text-xs font-medium text-teal-700 hover:underline disabled:text-slate-400"
+                        >
+                          {generateInvoice.isPending ? "Generating invoice…" : "Generate invoice"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
