@@ -9,7 +9,9 @@ const NAV_ITEMS = [
   { to: "/providers", label: "Providers", icon: "🏥" },
   { to: "/contracts", label: "Contracts", icon: "📄" },
   { to: "/payments", label: "Money Process", icon: "💶" },
+  { to: "/reports", label: "Reports", icon: "📈" },
   { to: "/users", label: "Users & Roles", icon: "👥", adminOnly: true },
+  { to: "/settings/mfa", label: "Security (2FA)", icon: "🔐" },
 ];
 
 export function AppLayout() {
@@ -19,9 +21,8 @@ export function AppLayout() {
   async function handleLogout() {
     try {
       if (refreshToken) await logoutRequest(refreshToken);
-    } catch {
-      // even if the server call fails, clear local session
-    } finally {
+    } catch {}
+    finally {
       logout();
       navigate("/login");
     }
@@ -31,11 +32,11 @@ export function AppLayout() {
     <div className="flex min-h-screen bg-slate-50">
       <aside className="flex w-60 flex-col border-r border-slate-200 bg-teal-900 text-white">
         <div className="px-5 py-5">
-          <div className="text-sm font-semibold tracking-wide text-teal-100">EAST MEDICAL</div>
-          <div className="text-xs text-teal-300">Assistance System</div>
+          <div className="text-xs font-bold tracking-widest text-teal-300 uppercase mb-0.5">East Medical</div>
+          <div className="text-sm font-semibold text-white leading-tight">Assistance System</div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3">
+        <nav className="flex-1 space-y-0.5 px-3 overflow-y-auto">
           {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => (
             <NavLink
               key={item.to}
@@ -55,11 +56,11 @@ export function AppLayout() {
         </nav>
 
         <div className="border-t border-teal-800 px-5 py-4">
-          <div className="text-sm font-medium">{user?.fullName}</div>
-          <div className="text-xs text-teal-300">{user?.role.replace(/_/g, " ")}</div>
+          <div className="text-sm font-medium text-white">{user?.fullName}</div>
+          <div className="text-xs text-teal-300 mb-2">{user?.role.replace(/_/g, " ")}</div>
           <button
             onClick={handleLogout}
-            className="mt-2 text-xs text-teal-200 underline-offset-2 hover:underline"
+            className="text-xs text-teal-200 underline-offset-2 hover:underline"
           >
             Sign out
           </button>

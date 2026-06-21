@@ -180,3 +180,11 @@ export async function createUser(req: Request, res: Response) {
     role: user.role,
   });
 }
+
+export async function listUsers(req: Request, res: Response) {
+  const users = await prisma.user.findMany({
+    select: { id: true, email: true, fullName: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true, updatedAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return res.json(users);
+}
