@@ -118,7 +118,7 @@ export async function verifyMFALogin(req: Request, res: Response) {
  * Disable MFA for the authenticated user (admin can also disable for others).
  */
 export async function disableMFA(req: Request, res: Response) {
-  const targetId = req.params.userId ?? req.user!.id;
+  const targetId = req.params.userId ? String(req.params.userId) : req.user!.id;
   if (targetId !== req.user!.id && req.user!.role !== "ADMIN") {
     return res.status(403).json({ error: "Only admins can disable MFA for other users" });
   }

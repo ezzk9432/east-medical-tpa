@@ -32,7 +32,7 @@ export async function stripeWebhook(req: Request, res: Response) {
 
   let event: any;
   try {
-    event = typeof req.body === "Buffer" ? JSON.parse(req.body.toString()) : req.body;
+    event = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
   } catch {
     return res.status(400).json({ error: "Invalid JSON body" });
   }
@@ -148,8 +148,7 @@ export async function submitHospitalClaim(req: Request, res: Response) {
   }
 
   try {
-    // Real hospital API call
-    const fetch = (await import("node-fetch")).default;
+    // Real hospital API call — Node 18+ has native fetch, no dependency needed
     const payload = {
       patientName: service.case.patient.fullName,
       caseNumber: service.case.caseNumber,
@@ -209,7 +208,6 @@ export async function getHospitalClaimStatus(req: Request, res: Response) {
   }
 
   try {
-    const fetch = (await import("node-fetch")).default;
     const resp = await fetch(`${env.hospitalApiUrl}/claims/${claimRef}`, {
       headers: { "X-Api-Key": env.hospitalApiKey },
     });

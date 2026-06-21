@@ -1,21 +1,12 @@
 import { api as apiClient } from "./client";
+import type { DashboardSummary, CaseStatus } from "../types";
 
-export interface DashboardSummary {
-  totalCases: number;
-  openCases: number;
-  closedCases: number;
-  urgentCases: number;
-  totalProviders: number;
-  activeContracts: number;
-  pendingPayments: number;
-  totalPaidAmount: number;
-  casesByStatus: { status: string; count: number }[];
-}
+export type { DashboardSummary };
 
 export interface AgingCase {
   id: string;
   caseNumber: string;
-  status: string;
+  status: CaseStatus;
   createdAt: string;
   patient: { fullName: string };
   ageDays: number;

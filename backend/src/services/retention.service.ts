@@ -31,7 +31,7 @@ export async function runRetentionPurge(): Promise<{ processed: number; purged: 
   let purged = 0;
 
   for (const c of eligibleCases) {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: typeof prisma) => {
       // 1. Anonymise patient PII (if no other active cases reference this patient)
       const otherActiveCases = await tx.case.count({
         where: {
