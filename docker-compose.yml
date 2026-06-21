@@ -1,0 +1,80 @@
+# East Medical TPA — Docker Compose
+# Usage:
+#   cp .env.example .env && nano .env   # fill in secrets
+#   docker compose up -d
+#   docker compose exec backend npx prisma migrate deploy
+#   docker compose exec backend npm run seed   # optional demo data
+
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: tpa_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: east_medical_tpa
+      POSTGRES_USER: tpa_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"   # remove this line in production to avoid exposing the DB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tpa_user -d east_medical_tpa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend API ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: tpa_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://tpa_user:${DB_PASSWORD}@db:5432/east_medical_tpa
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?required}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      MFA_ISSUER: ${MFA_ISSUER:-EastMedicalTPA}
+      RETENTION_DAYS: ${RETENTION_DAYS:-2555}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      PAYMOB_API_KEY: ${PAYMOB_API_KEY:-}
+      HOSPITAL_API_URL: ${HOSPITAL_API_URL:-}
+      HOSPITAL_API_KEY: ${HOSPITAL_API_KEY:-}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "4000:4000"   # not needed when fronted by nginx; can remove
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/server.js"
+
+  # ── Frontend (React + nginx) ────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: tpa_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  pg_data:
+  uploads_data:
