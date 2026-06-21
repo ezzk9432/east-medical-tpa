@@ -27,9 +27,12 @@ east-medical-tpa/
 - [x] Rate limiting, helmet security headers
 - [x] Seed script with demo data
 - [x] **React frontend** — login, dashboard, cases (list/detail/create), providers, contracts, money process, users & roles
+- [x] **Gap-closing vs. real-world TPA standard** (benchmarked against a production Dynamics 365 TPA system): case type/case type detail taxonomy, caller/intake info, geo detail (country/province/county), warranty tracking, document checklist (Yes/No flags), structured multi-diagnosis with ICD codes, case cloning, auto-generated activity timeline, documents linked to specific case services
 - [ ] Deployment config
 - [ ] MFA, field-level encryption, data retention rules (Phase 6 hardening)
 - [ ] External integrations (payment providers, hospital systems)
+- [ ] Record-level (per-case-owner) permission enforcement — currently role-level only
+- [ ] Per-case PDF report export ("Run Report") — JSON endpoint exists, PDF rendering not yet built
 
 ## Quick start (both servers)
 

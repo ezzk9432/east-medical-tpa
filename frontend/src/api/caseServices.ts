@@ -37,12 +37,14 @@ export async function listDocuments(caseId: string): Promise<CaseDocument[]> {
 export async function uploadDocument(
   caseId: string,
   category: DocumentCategory,
-  file: File
+  file: File,
+  caseServiceId?: string
 ): Promise<CaseDocument> {
   const formData = new FormData();
   formData.append("caseId", caseId);
   formData.append("category", category);
   formData.append("file", file);
+  if (caseServiceId) formData.append("caseServiceId", caseServiceId);
 
   const { data } = await api.post<CaseDocument>("/documents", formData, {
     headers: { "Content-Type": "multipart/form-data" },

@@ -78,8 +78,12 @@ async function main() {
   const patient = await prisma.patient.create({
     data: {
       fullName: "Lucia Cardoso",
+      gender: "Female",
       nationality: "Portuguese",
       passportNumber: "PT1234567",
+      country: "Egypt",
+      province: "Red Sea",
+      county: "Hurghada",
     },
   });
 
@@ -90,6 +94,31 @@ async function main() {
       patientId: patient.id,
       contractId: contract.id,
       createdById: caseManager.id,
+      caseType: "MEDICAL",
+      caseTypeDetail: "SIMPLE_MEDICAL_OUTPATIENT",
+      arrivalChannel: "PHONE",
+      callerName: "Ahmed Medhat",
+      callerPhone: "+20 100 000 0000",
+      tourAgency: "RNA (Rede Nacional de Assistencia)",
+      description: "GOP for Alfa hospital with limit 1000 euros.",
+      hasMedicalReport: true,
+      hasPolicyDoc: true,
+    },
+  });
+
+  await prisma.caseDiagnosis.create({
+    data: {
+      caseId: demoCase.id,
+      label: "UPPER RESPIRATORY TRACT INFECTION",
+      icdCode: "J06.9",
+      notes: "Acute respiratory tract infection with high fever",
+    },
+  });
+
+  await prisma.caseActivity.create({
+    data: {
+      caseId: demoCase.id,
+      message: `Case created by ${caseManager.email} for contract ${contract.insurerName}`,
     },
   });
 

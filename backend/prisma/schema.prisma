@@ -31,6 +31,33 @@ enum CaseStatus {
   CANCELLED
 }
 
+enum CaseType {
+  MEDICAL
+  DENTAL
+  TRAVEL
+  LEGAL
+  OTHER
+}
+
+enum CaseTypeDetail {
+  SIMPLE_MEDICAL_OUTPATIENT
+  LIGHT_ASSISTANCE_CASE
+  HOSPITALIZATION
+  EMERGENCY
+  REPATRIATION
+  EVACUATION
+  OTHER
+}
+
+enum ArrivalChannel {
+  PHONE
+  EMAIL
+  PORTAL
+  APP
+  WALK_IN
+  OTHER
+}
+
 enum CaseServiceStatus {
   PENDING
   CONFIRMED
@@ -136,6 +163,7 @@ model Patient {
   id              String   @id @default(uuid())
   fullName        String
   dateOfBirth     DateTime?
+  gender          String?
   nationality     String?
   passportNumber  String?
   policyNumber    String?
@@ -143,6 +171,13 @@ model Patient {
   email           String?
   address         String?
   emergencyContact String?
+
+  // Geo detail — matches standard TPA granularity (Country/Province/County/District)
+  country  String?
+  province String?
+  county   String?
+  district String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -206,6 +241,32 @@ model Case {
   status       CaseStatus @default(NEW)
   isUrgent     Boolean    @default(false)
 
+  // Case classification (matches standard TPA: Case Type / Case Type Detail)
+  caseType       CaseType?
+  caseTypeDetail CaseTypeDetail?
+  arrivalChannel ArrivalChannel?
+
+  // Caller / intake info (who reported the case, distinct from the patient)
+  callerName      String?
+  callerPhone     String?
+  callerEmail     String?
+  countryCode     String?
+  tourAgency      String?
+  customerReference String?
+  description     String? // free-text case description shown at intake
+  noteForProforma String?
+
+  // Warranty
+  warrantyStatus   String?
+  warrantyCurrency Currency?
+  warrantyLimitAmount Decimal? @db.Decimal(14, 2)
+
+  // Document checklist flags (Yes/No indicators seen in the standard system)
+  hasMedicalReport  Boolean @default(false)
+  hasMedicalExpenses Boolean @default(false)
+  hasPolicyDoc      Boolean @default(false)
+  hasPassportDoc    Boolean @default(false)
+
   patientId String
   patient   Patient @relation(fields: [patientId], references: [id])
 
@@ -218,16 +279,49 @@ model Case {
   assignedToId String?
   assignedTo   User?   @relation("CaseAssignedTo", fields: [assignedToId], references: [id])
 
+  // Case cloning lineage
+  clonedFromId String?
+  clonedFrom   Case?   @relation("CaseClone", fields: [clonedFromId], references: [id])
+  clones       Case[]  @relation("CaseClone")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   closedAt  DateTime?
 
   medicalInfo  MedicalInfo?
+  diagnoses    CaseDiagnosis[]
   caseServices CaseService[]
   documents    Document[]
   notes        CaseNote[]
+  activities   CaseActivity[]
 
   @@map("cases")
+}
+
+// Structured diagnosis list (replaces free-text diagnosis field) — matches
+// the standard system's multi-select "Diagnose" panel with ICD codes.
+model CaseDiagnosis {
+  id        String   @id @default(uuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  label     String // e.g. "UPPER RESPIRATORY TRACT INFECTION"
+  icdCode   String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@map("case_diagnoses")
+}
+
+// Auto-generated system activity feed (e.g. "Case created by X for Account Y"),
+// distinct from manually-entered CaseNote.
+model CaseActivity {
+  id        String   @id @default(uuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("case_activities")
 }
 
 model MedicalInfo {

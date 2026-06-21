@@ -1,11 +1,21 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useCase, useUpdateCaseStatus, useAddNote, useDocuments, useUploadDocument } from "../hooks/useCase";
+import {
+  useCase,
+  useUpdateCase,
+  useAddNote,
+  useDocuments,
+  useUploadDocument,
+  useCloneCase,
+} from "../hooks/useCase";
 import { Card, CardBody, CardHeader, Badge, Select } from "../components/ui";
 import { Button } from "../components/Button";
 import { caseStatusLabel, caseStatusTone, formatDate, formatMoney } from "../components/format";
 import { PageHeader } from "../components/PageHeader";
 import { NewCaseServiceForm } from "../components/NewCaseServiceForm";
+import { DiagnosisPanel } from "../components/DiagnosisPanel";
+import { ActivityFeed } from "../components/ActivityFeed";
+import { DocumentChecklist } from "../components/DocumentChecklist";
 import type { CaseStatus, DocumentCategory } from "../types";
 
 const STATUS_FLOW: CaseStatus[] = ["NEW", "HAS_SERVICE", "ASSIST_CLOSE", "MONEY_PROCESS", "CLOSED", "CANCELLED"];
@@ -21,15 +31,18 @@ const DOC_CATEGORIES: DocumentCategory[] = [
 
 export function CaseDetailPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const { data: caseData, isLoading } = useCase(id);
-  const updateStatus = useUpdateCaseStatus(id);
+  const updateCase = useUpdateCase(id);
   const addNote = useAddNote(id);
   const { data: documents } = useDocuments(id);
   const uploadDoc = useUploadDocument(id);
+  const cloneCase = useCloneCase(id);
 
   const [noteText, setNoteText] = useState("");
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [docCategory, setDocCategory] = useState<DocumentCategory>("MEDICAL_REPORT");
+  const [docCaseServiceId, setDocCaseServiceId] = useState<string>("");
 
   if (isLoading) return <div className="p-8 text-sm text-slate-500">Loading case…</div>;
   if (!caseData) return <div className="p-8 text-sm text-rose-600">Case not found.</div>;
@@ -37,9 +50,15 @@ export function CaseDetailPage() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      uploadDoc.mutate({ category: docCategory, file });
+      uploadDoc.mutate({ category: docCategory, file, caseServiceId: docCaseServiceId || undefined });
       e.target.value = "";
     }
+  }
+
+  function handleClone() {
+    cloneCase.mutate(true, {
+      onSuccess: (newCase) => navigate(`/cases/${newCase.id}`),
+    });
   }
 
   return (
@@ -51,22 +70,58 @@ export function CaseDetailPage() {
           <div className="flex items-center gap-2">
             {caseData.isUrgent && <Badge tone="rose">Urgent</Badge>}
             <Badge tone={caseStatusTone(caseData.status)}>{caseStatusLabel(caseData.status)}</Badge>
+            <Button variant="secondary" size="sm" onClick={handleClone} disabled={cloneCase.isPending}>
+              {cloneCase.isPending ? "Cloning…" : "Clone case"}
+            </Button>
           </div>
         }
       />
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-6">
+          {/* Case classification + caller info */}
+          <Card>
+            <CardHeader className="font-medium text-slate-700">Case details</CardHeader>
+            <CardBody className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <Field label="Case type" value={caseData.caseType} />
+              <Field label="Case type detail" value={caseData.caseTypeDetail?.replace(/_/g, " ")} />
+              <Field label="Arrival channel" value={caseData.arrivalChannel} />
+              <Field label="Caller name" value={caseData.callerName} />
+              <Field label="Caller phone" value={caseData.callerPhone} />
+              <Field label="Caller email" value={caseData.callerEmail} />
+              <Field label="Tour agency" value={caseData.tourAgency} />
+              <Field label="Customer reference" value={caseData.customerReference} />
+              {caseData.description && (
+                <div className="col-span-2">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Description</div>
+                  <div className="text-slate-800">{caseData.description}</div>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           {/* Patient info */}
           <Card>
             <CardHeader className="font-medium text-slate-700">Patient information</CardHeader>
             <CardBody className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
               <Field label="Full name" value={caseData.patient?.fullName} />
+              <Field label="Gender" value={caseData.patient?.gender} />
               <Field label="Nationality" value={caseData.patient?.nationality} />
               <Field label="Passport number" value={caseData.patient?.passportNumber} />
               <Field label="Policy number" value={caseData.patient?.policyNumber} />
               <Field label="Phone" value={caseData.patient?.phone} />
               <Field label="Email" value={caseData.patient?.email} />
+              <Field label="Country" value={caseData.patient?.country} />
+              <Field label="Province" value={caseData.patient?.province} />
+              <Field label="County" value={caseData.patient?.county} />
+            </CardBody>
+          </Card>
+
+          {/* Diagnosis */}
+          <Card>
+            <CardHeader className="font-medium text-slate-700">Diagnosis</CardHeader>
+            <CardBody>
+              <DiagnosisPanel caseId={caseData.id} diagnoses={caseData.diagnoses ?? []} />
             </CardBody>
           </Card>
 
@@ -110,15 +165,27 @@ export function CaseDetailPage() {
           <Card>
             <CardHeader className="font-medium text-slate-700">Documents</CardHeader>
             <CardBody>
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Select
                   value={docCategory}
                   onChange={(e) => setDocCategory(e.target.value as DocumentCategory)}
-                  className="max-w-xs"
+                  className="max-w-[180px]"
                 >
                   {DOC_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  value={docCaseServiceId}
+                  onChange={(e) => setDocCaseServiceId(e.target.value)}
+                  className="max-w-[200px]"
+                >
+                  <option value="">No linked service</option>
+                  {caseData.caseServices?.map((svc) => (
+                    <option key={svc.id} value={svc.id}>
+                      {svc.provider?.name ?? svc.serviceType} ({formatDate(svc.serviceDate)})
                     </option>
                   ))}
                 </Select>
@@ -138,6 +205,7 @@ export function CaseDetailPage() {
                     <div>
                       <span className="font-medium text-slate-800">{doc.fileName}</span>
                       <span className="ml-2 text-xs text-slate-400">{doc.category.replace(/_/g, " ")}</span>
+                      {doc.caseServiceId && <span className="ml-2 text-xs text-teal-600">linked to service</span>}
                     </div>
                     <a
                       href={doc.fileUrl}
@@ -190,15 +258,15 @@ export function CaseDetailPage() {
           </Card>
         </div>
 
-        {/* Sidebar: status control */}
+        {/* Sidebar */}
         <div className="space-y-6">
           <Card>
             <CardHeader className="font-medium text-slate-700">Status</CardHeader>
             <CardBody>
               <Select
                 value={caseData.status}
-                onChange={(e) => updateStatus.mutate(e.target.value as CaseStatus)}
-                disabled={updateStatus.isPending}
+                onChange={(e) => updateCase.mutate({ status: e.target.value as CaseStatus })}
+                disabled={updateCase.isPending}
               >
                 {STATUS_FLOW.map((s) => (
                   <option key={s} value={s}>
@@ -210,12 +278,41 @@ export function CaseDetailPage() {
           </Card>
 
           <Card>
+            <CardHeader className="font-medium text-slate-700">Document checklist</CardHeader>
+            <CardBody>
+              <DocumentChecklist caseData={caseData} />
+            </CardBody>
+          </Card>
+
+          {(caseData.warrantyStatus || caseData.warrantyLimitAmount) && (
+            <Card>
+              <CardHeader className="font-medium text-slate-700">Warranty</CardHeader>
+              <CardBody className="space-y-2 text-sm">
+                <Field label="Status" value={caseData.warrantyStatus} />
+                {caseData.warrantyLimitAmount != null && (
+                  <Field
+                    label="Limit"
+                    value={formatMoney(caseData.warrantyLimitAmount, caseData.warrantyCurrency ?? "EUR")}
+                  />
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          <Card>
             <CardHeader className="font-medium text-slate-700">Case info</CardHeader>
             <CardBody className="space-y-2 text-sm">
               <Field label="Created" value={formatDate(caseData.createdAt)} />
               <Field label="Last updated" value={formatDate(caseData.updatedAt)} />
               {caseData.closedAt && <Field label="Closed" value={formatDate(caseData.closedAt)} />}
               {caseData.contract && <Field label="Contract" value={caseData.contract.contractNumber} />}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader className="font-medium text-slate-700">Activity</CardHeader>
+            <CardBody>
+              <ActivityFeed activities={caseData.activities ?? []} />
             </CardBody>
           </Card>
         </div>
