@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { setupMFA, verifyTOTP } from "../services/mfa.service";
 import { writeAuditLog } from "../services/auditLog.service";
-import { signAccessToken } from "../utils/jwt";
+import { signAccessToken, signRefreshToken } from "../utils/jwt";
 
 /**
  * GET /api/auth/mfa/setup
@@ -101,6 +101,16 @@ export async function verifyMFALogin(req: Request, res: Response) {
 
   const accessToken = signAccessToken({ sub: user.id, role: user.role, email: user.email });
 
+  // Issue a full refresh token now that TOTP is verified
+  const refreshToken = signRefreshToken(user.id);
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  await prisma.refreshToken.create({
+    data: { token: refreshToken, userId: user.id, expiresAt },
+  });
+
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
   await writeAuditLog({
     action: "MFA_VERIFY",
     entityType: "User",
@@ -110,7 +120,11 @@ export async function verifyMFALogin(req: Request, res: Response) {
     ipAddress: req.ip ?? undefined,
   });
 
-  return res.json({ accessToken });
+  return res.json({
+    accessToken,
+    refreshToken,
+    user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role },
+  });
 }
 
 /**

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { verifyPassword, hashPassword } from "../utils/password";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt";
+import { signAccessToken, signRefreshToken, verifyRefreshToken, signMFAChallengeToken } from "../utils/jwt";
 import { writeAuditLog } from "../services/auditLog.service";
 import { env } from "../config/env";
 
@@ -48,6 +48,26 @@ export async function login(req: Request, res: Response) {
 
   const accessToken = signAccessToken({ sub: user.id, role: user.role, email: user.email });
   const refreshToken = signRefreshToken(user.id);
+
+  // ── MFA gate ────────────────────────────────────────────
+  // If the user has enabled MFA we must NOT issue real tokens here.
+  // Instead issue a short-lived (5 min) challenge token and let the
+  // frontend complete the TOTP step via POST /api/auth/mfa/verify.
+  if (user.mfaEnabled) {
+    await writeAuditLog({
+      action: "LOGIN_SUCCESS",
+      entityType: "User",
+      entityId: user.id,
+      userId: user.id,
+      details: { mfaRequired: true },
+      ipAddress,
+    });
+    return res.json({
+      mfaRequired: true,
+      tempToken: signMFAChallengeToken(user.id),
+    });
+  }
+  // ────────────────────────────────────────────────────────
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // matches JWT_REFRESH_EXPIRES_IN default

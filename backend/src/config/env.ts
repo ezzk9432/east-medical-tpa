@@ -26,6 +26,7 @@ export const env = {
   // External integrations
   stripeWebhookSecret: optional("STRIPE_WEBHOOK_SECRET", ""),
   paymobApiKey: optional("PAYMOB_API_KEY", ""),
+  paymobHmacSecret: optional("PAYMOB_HMAC_SECRET", ""),  // Dashboard → Developers → HMAC Secret
   hospitalApiUrl: optional("HOSPITAL_API_URL", ""),
   hospitalApiKey: optional("HOSPITAL_API_KEY", ""),
   // Data retention (days after case closure before anonymisation)

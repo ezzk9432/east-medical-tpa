@@ -14,18 +14,63 @@ import { writeAuditLog } from "../services/auditLog.service";
 
 // ─── Stripe Webhook ──────────────────────────────────────
 
-export async function stripeWebhook(req: Request, res: Response) {
-  // Verify Stripe signature
-  const sig = req.headers["stripe-signature"] as string;
-  if (env.stripeWebhookSecret && sig) {
-    const hmac = crypto
-      .createHmac("sha256", env.stripeWebhookSecret)
-      .update(req.body as Buffer)
+/**
+ * Verifies a Stripe webhook signature using their documented scheme:
+ *   1. Extract `t` (timestamp) and `v1` (signature) from the header
+ *      format: "t=1234567890,v1=abc123..."
+ *   2. Compute HMAC-SHA256 of "<t>.<rawBody>" using the webhook secret
+ *   3. Compare computed vs v1 with timingSafeEqual (same-length buffers)
+ *
+ * Returns false (never throws) so the caller can produce a clean 400.
+ */
+function verifyStripeSignature(
+  rawBody: Buffer,
+  sigHeader: string,
+  secret: string
+): boolean {
+  try {
+    const parts: Record<string, string> = {};
+    for (const part of sigHeader.split(",")) {
+      const [k, v] = part.split("=");
+      if (k && v) parts[k.trim()] = v.trim();
+    }
+
+    const timestamp = parts["t"];
+    const v1 = parts["v1"];
+
+    // Reject if header is malformed or timestamp is missing
+    if (!timestamp || !v1) return false;
+
+    // Reject replays older than 5 minutes
+    const age = Math.abs(Date.now() / 1000 - parseInt(timestamp, 10));
+    if (age > 300) return false;
+
+    const signedPayload = `${timestamp}.${rawBody.toString("utf8")}`;
+    const expectedHex = crypto
+      .createHmac("sha256", secret)
+      .update(signedPayload)
       .digest("hex");
-    // In production use the official stripe library: stripe.webhooks.constructEvent(...)
-    // Here we do a basic HMAC check
-    const expected = `sha256=${hmac}`;
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+
+    const expectedBuf = Buffer.from(expectedHex, "hex");
+    const receivedBuf = Buffer.from(v1, "hex");
+
+    // timingSafeEqual requires equal lengths — reject immediately if different
+    if (expectedBuf.length !== receivedBuf.length) return false;
+
+    return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+  } catch {
+    return false;
+  }
+}
+
+export async function stripeWebhook(req: Request, res: Response) {
+  const sig = req.headers["stripe-signature"] as string | undefined;
+
+  if (env.stripeWebhookSecret) {
+    if (!sig) {
+      return res.status(400).json({ error: "Missing Stripe-Signature header" });
+    }
+    if (!verifyStripeSignature(req.body as Buffer, sig, env.stripeWebhookSecret)) {
       return res.status(400).json({ error: "Invalid Stripe signature" });
     }
   }
@@ -85,8 +130,90 @@ export async function stripeWebhook(req: Request, res: Response) {
 
 // ─── Paymob Webhook ──────────────────────────────────────
 
+/**
+ * Verifies Paymob's webhook HMAC using their documented field-concatenation
+ * scheme (v1 API). Paymob concatenates specific transaction fields in a fixed
+ * order, HMAC-SHA512s the result with your HMAC secret from the dashboard,
+ * and sends it as `body.obj.hmac`.
+ *
+ * Field order (from Paymob docs):
+ *   amount_cents, created_at, currency, error_occured, has_parent_transaction,
+ *   id, integration_id, is_3d_secure, is_auth, is_capture, is_refunded,
+ *   is_standalone_payment, is_voided, order.id, owner, pending,
+ *   source_data.pan, source_data.sub_type, source_data.type, success
+ *
+ * Returns false (never throws) on any problem.
+ */
+function verifyPaymobHmac(txn: Record<string, any>, secret: string): boolean {
+  try {
+    const fields = [
+      txn["amount_cents"],
+      txn["created_at"],
+      txn["currency"],
+      txn["error_occured"],
+      txn["has_parent_transaction"],
+      txn["id"],
+      txn["integration_id"],
+      txn["is_3d_secure"],
+      txn["is_auth"],
+      txn["is_capture"],
+      txn["is_refunded"],
+      txn["is_standalone_payment"],
+      txn["is_voided"],
+      txn["order"]?.["id"],
+      txn["owner"],
+      txn["pending"],
+      txn["source_data"]?.["pan"],
+      txn["source_data"]?.["sub_type"],
+      txn["source_data"]?.["type"],
+      txn["success"],
+    ];
+
+    const concatenated = fields.map((v) => String(v ?? "")).join("");
+    const computed = crypto
+      .createHmac("sha512", secret)
+      .update(concatenated)
+      .digest("hex");
+
+    const received = String(txn["hmac"] ?? "");
+
+    // Constant-time compare; both are hex strings so same charset — lengths will
+    // match for any valid HMAC, but we guard anyway to prevent throw.
+    const computedBuf = Buffer.from(computed, "hex");
+    const receivedBuf = Buffer.from(received, "hex");
+    if (computedBuf.length !== receivedBuf.length) return false;
+
+    return crypto.timingSafeEqual(computedBuf, receivedBuf);
+  } catch {
+    return false;
+  }
+}
+
 export async function paymobWebhook(req: Request, res: Response) {
   const body = req.body as any;
+  const txn = body?.obj;
+
+  // ── Signature verification ───────────────────────────────
+  if (env.paymobHmacSecret) {
+    if (!txn) {
+      return res.status(400).json({ error: "Missing transaction object" });
+    }
+    if (!verifyPaymobHmac(txn, env.paymobHmacSecret)) {
+      // Log the rejection for diagnostics but don't reveal details
+      console.warn("[Paymob] Webhook HMAC verification failed — rejecting request");
+      return res.status(400).json({ error: "Invalid webhook signature" });
+    }
+  } else {
+    // Warn loudly in production if the secret is not configured, but don't
+    // hard-reject (allows local dev without Paymob credentials).
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[Paymob] PAYMOB_HMAC_SECRET is not set — webhook signature is NOT verified. " +
+        "This is a SECURITY RISK. Set it in your .env immediately."
+      );
+    }
+  }
+  // ────────────────────────────────────────────────────────
 
   await prisma.webhookEvent.create({
     data: {
@@ -96,7 +223,6 @@ export async function paymobWebhook(req: Request, res: Response) {
     },
   });
 
-  const txn = body?.obj;
   if (txn?.success === true && txn?.order?.merchant_order_id) {
     await prisma.payment.updateMany({
       where: { id: txn.order.merchant_order_id },

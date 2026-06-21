@@ -3,6 +3,16 @@ import { z } from "zod";
 import { prisma } from "../config/prisma";
 import { writeAuditLog } from "../services/auditLog.service";
 import { generateCaseNumber } from "../services/caseNumber.service";
+import { encryptPatientPII, decryptPatientPII } from "../services/encryption.service";
+
+/**
+ * Decrypts PII on a case's nested patient (mutates and returns the case).
+ * Applied at every response point so callers never see raw ciphertext.
+ */
+function withDecryptedPatient<T extends { patient?: any }>(caseRecord: T): T {
+  if (caseRecord.patient) decryptPatientPII(caseRecord.patient);
+  return caseRecord;
+}
 
 const createCaseSchema = z.object({
   patientId: z.string().uuid().optional(),
@@ -69,16 +79,24 @@ export async function createCase(req: Request, res: Response) {
   let resolvedPatientId = patientId;
 
   if (!resolvedPatientId && patient) {
+    // Encrypt PII fields before writing to DB
+    const encryptedPII = encryptPatientPII({
+      passportNumber: patient.passportNumber,
+      policyNumber: patient.policyNumber,
+      phone: patient.phone,
+      email: patient.email,
+    });
+
     const newPatient = await prisma.patient.create({
       data: {
         fullName: patient.fullName,
         dateOfBirth: patient.dateOfBirth ? new Date(patient.dateOfBirth) : undefined,
         gender: patient.gender,
         nationality: patient.nationality,
-        passportNumber: patient.passportNumber,
-        policyNumber: patient.policyNumber,
-        phone: patient.phone,
-        email: patient.email,
+        passportNumber: encryptedPII.passportNumber,
+        policyNumber: encryptedPII.policyNumber,
+        phone: encryptedPII.phone,
+        email: encryptedPII.email,
         country: patient.country,
         province: patient.province,
         county: patient.county,
@@ -120,7 +138,7 @@ export async function createCase(req: Request, res: Response) {
     ipAddress: req.ip ?? undefined,
   });
 
-  return res.status(201).json(newCase);
+  return res.status(201).json(withDecryptedPatient(newCase));
 }
 
 export async function listCases(req: Request, res: Response) {
@@ -150,7 +168,7 @@ export async function listCases(req: Request, res: Response) {
   ]);
 
   return res.json({
-    data: cases,
+    data: cases.map(withDecryptedPatient),
     pagination: { page: pageNum, pageSize: pageSizeNum, total, totalPages: Math.ceil(total / pageSizeNum) },
   });
 }
@@ -186,7 +204,7 @@ export async function getCase(req: Request, res: Response) {
     ipAddress: req.ip ?? undefined,
   });
 
-  return res.json(caseRecord);
+  return res.json(withDecryptedPatient(caseRecord));
 }
 
 const updateCaseSchema = z.object({
@@ -263,7 +281,7 @@ export async function updateCase(req: Request, res: Response) {
     ipAddress: req.ip ?? undefined,
   });
 
-  return res.json(updated);
+  return res.json(withDecryptedPatient(updated));
 }
 
 const cloneCaseSchema = z.object({
@@ -344,7 +362,7 @@ export async function cloneCase(req: Request, res: Response) {
     ipAddress: req.ip ?? undefined,
   });
 
-  return res.status(201).json(cloned);
+  return res.status(201).json(withDecryptedPatient(cloned));
 }
 
 const addNoteSchema = z.object({
@@ -481,7 +499,7 @@ export async function getCaseReport(req: Request, res: Response) {
   return res.json({
     caseNumber: caseRecord.caseNumber,
     status: caseRecord.status,
-    patient: caseRecord.patient,
+    patient: decryptPatientPII({ ...caseRecord.patient }),
     contract: caseRecord.contract,
     diagnoses: caseRecord.diagnoses,
     services: caseRecord.caseServices,

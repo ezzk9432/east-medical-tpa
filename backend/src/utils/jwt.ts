@@ -27,3 +27,17 @@ export function verifyAccessToken(token: string): AccessTokenPayload {
 export function verifyRefreshToken(token: string): { sub: string } {
   return jwt.verify(token, env.jwtRefreshSecret) as { sub: string };
 }
+
+/**
+ * Sign a short-lived MFA challenge token (5 minutes).
+ * Uses the refresh secret so we don't need a third secret env var.
+ * The payload includes mfaChallenge:true so verifyMFALogin() can distinguish
+ * this from a real refresh token.
+ */
+export function signMFAChallengeToken(userId: string): string {
+  return jwt.sign(
+    { sub: userId, mfaChallenge: true },
+    env.jwtRefreshSecret,
+    { expiresIn: "5m" } as jwt.SignOptions
+  );
+}
