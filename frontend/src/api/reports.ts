@@ -25,11 +25,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 }
 
 export async function getAgingReport(): Promise<AgingCase[]> {
-  const { data } = await apiClient.get("/reports/aging");
+  const { data } = await apiClient.get("/reports/case-aging");
   return data;
 }
 
 export async function getFinancialReport(params?: { startDate?: string; endDate?: string }): Promise<FinancialSummary> {
-  const { data } = await apiClient.get("/reports/financial", { params });
+  const { data } = await apiClient.get("/reports/financial-summary", { params });
   return data;
 }

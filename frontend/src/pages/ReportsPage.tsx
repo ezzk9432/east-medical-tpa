@@ -17,13 +17,11 @@ export function ReportsPage() {
   const agingQ = useQuery({
     queryKey: ["report-aging"],
     queryFn: getAgingReport,
-    enabled: tab === "aging",
   });
 
   const financialQ = useQuery({
     queryKey: ["report-financial", startDate, endDate],
     queryFn: () => getFinancialReport({ startDate: startDate || undefined, endDate: endDate || undefined }),
-    enabled: tab === "financial",
   });
 
   function handleExportAging(format: "csv" | "xlsx") {
